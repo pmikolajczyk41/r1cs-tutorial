@@ -37,7 +37,7 @@ impl TransactionVar {
         let mut message = self.sender.to_bytes_le();
         message.extend(self.recipient.to_bytes_le());
         message.extend(self.amount.to_bytes_le());
-        SchnorrSignatureVerifyGadget::verify(&pp, &pub_key, &message, &self.signature)
+        SchnorrSignatureVerifyGadget::verify(pp, pub_key, &message, &self.signature)
     }
 
     fn check_account_existence(
@@ -50,7 +50,7 @@ impl TransactionVar {
         account_path.verify_membership(
             &parameters.leaf_crh_params,
             &parameters.two_to_one_crh_params,
-            &root,
+            root,
             &account.to_bytes_le().as_slice(),
         )
     }
@@ -62,6 +62,7 @@ impl TransactionVar {
     /// 2. Verify that the sender's account has sufficient balance to finance
     /// the transaction.
     /// 3. Verify that the recipient's account exists.
+    #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(
         target = "r1cs",
         skip(
@@ -108,7 +109,7 @@ impl TransactionVar {
         let sender_existed = self.check_account_existence(
             parameters,
             pre_sender_path,
-            &pre_sender_acc_info,
+            pre_sender_acc_info,
             pre_root,
         )?;
         let sender_will_exist = self.check_account_existence(
@@ -125,7 +126,7 @@ impl TransactionVar {
         let recipient_existed = self.check_account_existence(
             parameters,
             pre_recipient_path,
-            &pre_recipient_acc_info,
+            pre_recipient_acc_info,
             pre_root,
         )?;
         let recipient_will_exist = self.check_account_existence(
