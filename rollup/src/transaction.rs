@@ -40,6 +40,21 @@ impl TransactionVar {
         SchnorrSignatureVerifyGadget::verify(&pp, &pub_key, &message, &self.signature)
     }
 
+    fn check_account_existence(
+        &self,
+        parameters: &ledger::ParametersVar,
+        account_path: &AccPathVar,
+        account: &AccountInformationVar,
+        root: &AccRootVar,
+    ) -> Result<Boolean<ConstraintF>, SynthesisError> {
+        account_path.verify_membership(
+            &parameters.leaf_crh_params,
+            &parameters.two_to_one_crh_params,
+            &root,
+            &account.to_bytes_le().as_slice(),
+        )
+    }
+
     /// Check that the transaction is valid for the given ledger state. This checks
     /// the following conditions:
     /// 1. Verify that the signature is valid with respect to the public key
@@ -75,42 +90,53 @@ impl TransactionVar {
         post_root: &AccRootVar,
     ) -> Result<Boolean<ConstraintF>, SynthesisError> {
         // Verify the signature against the sender pubkey.
-        // TODO: FILL IN THE BLANK
-        // let sig_verifies = ???;
+        let sig_verifies =
+            self.verify_signature(&parameters.sig_params, &pre_sender_acc_info.public_key)?;
 
         // Compute the new sender balance.
         let mut post_sender_acc_info = pre_sender_acc_info.clone();
-        // TODO: Safely subtract amount sent from the sender's balance
-        // post_sender_acc_info.balance = ???;
+        post_sender_acc_info.balance = post_sender_acc_info.balance.checked_sub(&self.amount)?;
 
-        // TODO: Compute the new receiver balance, ensure its overflow safe.
+        // Compute the new receiver balance, ensure its overflow safe.
         let mut post_recipient_acc_info = pre_recipient_acc_info.clone();
-        // post_recipient_acc_info.balance = ???
+        post_recipient_acc_info.balance =
+            post_recipient_acc_info.balance.checked_add(&self.amount)?;
 
         // Check that the pre-tx sender account information is correct with
         // respect to `pre_tx_root`, and that the post-tx sender account
         // information is correct with respect to `post_tx_root`.
-        // HINT: Use the path structs
-        // TODO: FILL IN THE FOLLOWING
-        // let sender_exists = ???
-
-        // let sender_updated_correctly = ???
+        let sender_existed = self.check_account_existence(
+            parameters,
+            pre_sender_path,
+            &pre_sender_acc_info,
+            pre_root,
+        )?;
+        let sender_will_exist = self.check_account_existence(
+            parameters,
+            post_sender_path,
+            &post_sender_acc_info,
+            post_root,
+        )?;
+        let sender_exists = sender_existed.and(&sender_will_exist)?;
 
         // Check that the pre-tx recipient account information is correct with
         // respect to `pre_tx_root`, and that the post-tx recipient account
         // information is correct with respect to `post_tx_root`.
-        // TODO: FILL IN THE FOLLOWING
-        // let recipient_exists = ???
+        let recipient_existed = self.check_account_existence(
+            parameters,
+            pre_recipient_path,
+            &pre_recipient_acc_info,
+            pre_root,
+        )?;
+        let recipient_will_exist = self.check_account_existence(
+            parameters,
+            post_recipient_path,
+            &post_recipient_acc_info,
+            post_root,
+        )?;
+        let recipient_exists = recipient_existed.and(&recipient_will_exist)?;
 
-        // let recipient_updated_correctly = ???
-
-        // TODO: Uncomment the following
-        // sender_exists
-        //     .and(&sender_updated_correctly)?
-        //     .and(&recipient_exists)?
-        //     .and(&recipient_updated_correctly)?
-        //     .and(&sig_verifies)
-        Err(SynthesisError::Unsatisfiable)
+        sender_exists.and(&recipient_exists)?.and(&sig_verifies)
     }
 }
 
